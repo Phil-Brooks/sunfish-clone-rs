@@ -88,6 +88,54 @@ fn main() {
         padded.extend(std::iter::repeat(0).take(20));
         *table = padded;
     }
+    //###############################################################################
+    // Global constants
+    //###############################################################################
+
+    // Our board is represented as a 120 character string. The padding allows for
+    // fast detection of moves that don't stay within the board.
+    let (a1, h1, a8, h8) = (91, 98, 21, 28);
+    let initial = "         \n".to_owned() + //   0 -  9
+        "         \n" + //  10 - 19
+        " rnbqkbnr\n" + //  20 - 29
+        " pppppppp\n" + //  30 - 39
+        " ........\n" + //  40 - 49
+        " ........\n" + //  50 - 59
+        " ........\n" + //  60 - 69
+        " ........\n" + //  70 - 79
+        " PPPPPPPP\n" + //  80 - 89
+        " RNBQKBNR\n" + //  90 - 99
+        "         \n" + // 100 -109
+        "         \n"; // 110 -119
+    // Lists of possible moves for each piece type.
+    let (n, e, s, w) = (-10, 1, 10, -1);
+    let directions = HashMap::from([
+        ('P', vec![n, n + n, n + w, n + e]),
+        (
+            'N',
+            vec![
+                n + n + e,
+                e + n + e,
+                e + s + e,
+                s + s + e,
+                s + s + w,
+                w + s + w,
+                w + n + w,
+                n + n + w,
+            ],
+        ),
+        ('B', vec![n + e, s + e, s + w, n + w]),
+        ('R', vec![n, e, s, w]),
+        ('Q', vec![n, e, s, w, n + e, s + e, s + w, n + w]),
+        ('K', vec![n, e, s, w, n + e, s + e, s + w, n + w]),
+    ]);
+    // Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
+    // King value is set to twice this value such that if the opponent is
+    // 8 queens up, but we got the king, we still exceed MATE_VALUE.
+    // When a MATE is detected, we'll set the score to MATE_UPPER - plies to get there
+    // E.g. Mate in 3 will be MATE_UPPER - 6
+    let mate_lower: i32 = piece[&'K'] - 10 * piece[&'Q'];
+    let mate_upper: i32 = piece[&'K'] + 10 * piece[&'Q'];
 
     println!("Hello, world!");
 }
