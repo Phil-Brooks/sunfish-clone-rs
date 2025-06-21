@@ -146,8 +146,8 @@ fn main() {
         score: i32,         // the board evaluation
         wc: (bool, bool),   // the castling rights, [west/queen side, east/king side]
         bc: (bool, bool),   // the opponent castling rights, [west/king side, east/queen side]
-        ep: i32,            // the en passant square
-        kp: i32,            // the king passant square
+        ep: usize,            // the en passant square
+        kp: usize,            // the king passant square
     }
     impl Position {
         fn gen_moves(&self) -> Vec<Move> {
@@ -180,7 +180,7 @@ fn main() {
                         }
                         if [n + w, n + e].contains(&d)
                             && q == '.'
-                            && [self.ep, self.kp, self.kp - 1, self.kp + 1].contains(&(j as i32))
+                            && [self.ep, self.kp, self.kp - 1, self.kp + 1].contains(&j)
                         {
                             break;
                         }
@@ -207,14 +207,14 @@ fn main() {
                         break;
                     }
                     // Castling, by sliding the rook next to the king
-                    if i == a1 && self.board[j + e as usize] == 'K' && self.wc[0] {
+                    if i == a1 && self.board[j + e as usize] == 'K' && self.wc.0 {
                         moves.push(Move {
                             i: j + e as usize,
                             j: j + w as usize,
                             prom: ' ',
                         })
                     }
-                    if i == h1 && self.board[j + w as usize] == 'K' && self.wc[1] {
+                    if i == h1 && self.board[j + w as usize] == 'K' && self.wc.1 {
                         moves.push(Move {
                             i: j + w as usize,
                             j: j + e as usize,
@@ -224,6 +224,30 @@ fn main() {
                 }
             }
             moves
+        }
+        fn rotate(&self, nullmove: bool) -> Position {
+            Position {
+                board: Self::swap_case(self.board), 
+                score: -self.score, 
+                wc: self.wc,
+                bc: self.bc,
+                ep: if self.ep==0 || nullmove {0} else {119 - self.ep},
+                kp: if self.kp==0 || nullmove {0} else {119 - self.kp},
+            }
+        }
+        // Helper function to swap the case of each character in the board array
+        fn swap_case(board: [char; 120]) -> [char; 120] {
+            let mut new_board = [' '; 120];
+            for (i, &c) in board.iter().enumerate() {
+                new_board[i] = if c.is_ascii_lowercase() {
+                    c.to_ascii_uppercase()
+                } else if c.is_ascii_uppercase() {
+                    c.to_ascii_lowercase()
+                } else {
+                    c
+                };
+            }
+            new_board
         }
     }
 
