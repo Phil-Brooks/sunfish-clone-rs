@@ -1,5 +1,9 @@
 // this is intended to be an exact replica of sunfish from https://github.com/thomasahle/sunfish
 // rust specifics will only be used where absolutely needed.
+use std::cmp::max;
+use std::collections::HashMap;
+use std::collections::HashSet;
+
 const VERSION: &str = "sunfish 2023";
 
 fn main() {
@@ -80,7 +84,6 @@ fn main() {
     //###############################################################################
     // Global constants
     //###############################################################################
-
     // Our board is represented as a 120 character string. The padding allows for
     // fast detection of moves that don't stay within the board.
     let (a1, h1, a8, h8) = (91, 98, 21, 28);
@@ -140,14 +143,15 @@ fn main() {
         j: usize,
         prom: char,
     }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     struct Position {
         //A state of a chess game
         board: [char; 120], // a 120 char representation of the board
         score: i32,         // the board evaluation
         wc: (bool, bool),   // the castling rights, [west/queen side, east/king side]
         bc: (bool, bool),   // the opponent castling rights, [west/king side, east/queen side]
-        ep: usize,            // the en passant square
-        kp: usize,            // the king passant square
+        ep: usize,          // the en passant square
+        kp: usize,          // the king passant square
     }
     impl Position {
         fn gen_moves(&self) -> Vec<Move> {
@@ -162,7 +166,7 @@ fn main() {
                 }
                 let directions = directions(p);
                 for &d in &directions {
-                    let mut j = i + d as usize;
+                    let j = i + d as usize;
                     let q = self.board[j];
                     // Stay inside the board, and off friendly pieces
                     if q.is_ascii_uppercase() || q.is_whitespace() {
@@ -227,12 +231,20 @@ fn main() {
         }
         fn rotate(&self, nullmove: bool) -> Position {
             Position {
-                board: Self::swap_case(self.board), 
-                score: -self.score, 
+                board: Self::swap_case(self.board),
+                score: -self.score,
                 wc: self.wc,
                 bc: self.bc,
-                ep: if self.ep==0 || nullmove {0} else {119 - self.ep},
-                kp: if self.kp==0 || nullmove {0} else {119 - self.kp},
+                ep: if self.ep == 0 || nullmove {
+                    0
+                } else {
+                    119 - self.ep
+                },
+                kp: if self.kp == 0 || nullmove {
+                    0
+                } else {
+                    119 - self.kp
+                },
             }
         }
         // Helper function to swap the case of each character in the board array
@@ -248,6 +260,176 @@ fn main() {
                 };
             }
             new_board
+        }
+        fn domove(&self, mov: Move) -> Position {
+            let (a1, h1, a8, h8) = (91, 98, 21, 28);
+            let (n, e, s, w) = (-10i32, 1, 10i32, -1);
+            let (i, j) = (mov.i, mov.j);
+            let p = self.board[i];
+            let q = self.board[j];
+            let put_ = |mut board: [char; 120], i: usize, p: char| -> [char; 120] {
+                board[i] = p;
+                board
+            };
+            // Copy variables and reset ep and kp
+            let mut board = self.board;
+            let mut wc = self.wc;
+            let mut bc = self.bc;
+            let mut ep = 0;
+            let mut kp = 0;
+            //  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! TODO
+            let score = self.score + self.value(&mov);
+            // Actual move
+            board = put_(board, j, board[i]);
+            board = put_(board, i, '.');
+            // Castling rights, we move the rook or capture the opponent's
+            if i == a1 {
+                wc = (false, wc.1);
+            }
+            if i == h1 {
+                wc = (wc.0, false);
+            }
+            if j == a8 {
+                bc = (bc.0, false);
+            }
+            if j == h8 {
+                bc = (false, bc.1);
+            }
+            // Castling
+            if p == 'K' {
+                wc = (false, false);
+                if (j as isize - i as isize).abs() == 2 {
+                    kp = (i + j) / 2;
+                    board = put_(board, if j < i { a1 } else { h1 }, '.');
+                    board = put_(board, kp, 'R');
+                }
+            }
+            // Pawn promotion, double move and en passant capture
+            if p == 'P' {
+                if a8 <= j && j <= h8 {
+                    board = put_(board, j, mov.prom);
+                }
+                if (j as i32) - (i as i32) == 2 * n {
+                    ep = (i as i32 + n) as usize;
+                }
+                if j == self.ep {
+                    board = put_(board, (j as i32 + s) as usize, '.');
+                }
+            }
+            Position {
+                board: board,
+                score: score,
+                wc: wc,
+                bc: bc,
+                ep: ep,
+                kp: kp,
+            }
+            .rotate(false)
+        }
+        fn value(&self, mov: &Move) -> i32 {
+            let (a1, h1, a8, h8) = (91, 98, 21, 28);
+            let (n, e, s, w) = (-10i32, 1, 10i32, -1);
+            let (i, j) = (mov.i, mov.j);
+            let p = self.board[i];
+            let q = self.board[j];
+            // Actual move
+            let mut score = pst(p)[j] - pst(p)[i];
+            // Capture
+            if q.is_ascii_lowercase() {
+                score += pst(q.to_ascii_uppercase())[119 - j];
+            }
+            // Castling check detection
+            if (j as isize - self.kp as isize).abs() < 2 {
+                score += pst('K')[119 - j];
+            }
+            // Castling
+            if p == 'K' && ((i as isize - j as isize).abs() == 2) {
+                score += pst('R')[(i + j) / 2];
+                score -= pst('R')[if j < i { a1 } else { h1 }];
+            }
+            // Special pawn stuff
+            if p == 'P' {
+                if a8 <= j && j <= h8 {
+                    score += pst(mov.prom)[j] - pst('P')[j];
+                }
+                if j == self.ep {
+                    score += pst('P')[(119 - (j as i32 + s)) as usize]
+                }
+            }
+            score
+        }
+    }
+    //###############################################################################
+    // Search logic
+    //###############################################################################
+    // lower <= s(pos) <= upper
+    #[derive(Clone, Copy)]
+    struct Entry {
+        lower: i32,
+        upper: i32,
+    }
+
+    struct Searcher {
+        tp_score: HashMap<(Position, i32, bool), Entry>,
+        tp_move: HashMap<Position, (usize, usize)>,
+        history: HashSet<Position>,
+        nodes: u32,
+    }
+    impl Searcher {
+        fn new() -> Searcher {
+            Searcher {
+                tp_score: HashMap::new(),
+                tp_move: HashMap::new(),
+                history: HashSet::new(),
+                nodes: 0,
+            }
+        }
+        fn bound(&mut self, pos: &Position, gamma: i32, mut depth: i32, can_null: bool) -> i32 {
+            let mate_lower: i32 = piece('K') - 10 * piece('Q');
+            let mate_upper: i32 = piece('K') + 10 * piece('Q');
+            let default_entry: Entry = Entry {
+                lower: -mate_upper,
+                upper: mate_upper,
+            };
+            // Let s* be the "true" score of the sub-tree we are searching.
+            // The method returns r, where
+            // if gamma >  s* then s* <= r < gamma  (A better upper bound)
+            // if gamma <= s* then gamma <= r <= s* (A better lower bound)
+            self.nodes += 1;
+            // Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
+            // calmness, and from this point on there is no difference in behaviour depending on
+            // depth, so so there is no reason to keep different depths in the transposition table.
+            depth = max(depth, 0);
+            // Sunfish is a king-capture engine, so we should always check if we
+            // still have a king. Notice since this is the only termination check,
+            // the remaining code has to be comfortable with being mated, stalemated
+            //# or able to capture the opponent king.
+            if pos.score <= -mate_lower {
+                return -mate_upper;
+            }
+            // Look in the table if we have already searched this position before.
+            // We also need to be sure, that the stored search was over the same
+            // nodes as the current search.
+            let entry = *self
+                .tp_score
+                .get(&(*pos, depth, can_null))
+                .unwrap_or(&default_entry);
+            if entry.lower >= gamma {
+                return entry.lower;
+            }
+            if entry.upper < gamma {
+                return entry.upper;
+            }
+            // Let's not repeat positions. We don't chat
+            // - at the root (can_null=False) since it is in history, but not a draw.
+            // - at depth=0, since it would be expensive and break "futility pruning".
+            if can_null && depth > 0 && self.history.contains(&pos) {
+                return 0;
+            }
+
+
+
+            return 0;
         }
     }
 
