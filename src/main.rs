@@ -138,6 +138,7 @@ fn main() {
     //###############################################################################
     // Chess logic
     //###############################################################################
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     struct Move {
         i: usize,
         j: usize,
@@ -371,7 +372,7 @@ fn main() {
 
     struct Searcher {
         tp_score: HashMap<(Position, i32, bool), Entry>,
-        tp_move: HashMap<Position, (usize, usize)>,
+        tp_move: HashMap<Position, Move>,
         history: HashSet<Position>,
         nodes: u32,
     }
@@ -426,10 +427,70 @@ fn main() {
             if can_null && depth > 0 && self.history.contains(&pos) {
                 return 0;
             }
+            // Call moves
+            let moves = Self::moves(self, depth, can_null, pos, gamma);
 
-
+            let mut best = -mate_upper;
+            // First try not moving at all
 
             return 0;
+        }
+        // Generator of moves to search in order.
+        // This allows us to define the moves, but only calculate them if needed.
+        fn moves(
+            &mut self,
+            depth: i32,
+            can_null: bool,
+            pos: &Position,
+            gamma: i32,
+        ) -> Vec<(Option<Move>, i32)> {
+            let qs = 40;
+            let qs_a = 140;
+            let mut ans: Vec<(Option<Move>, i32)> = Vec::new();
+            // First try not moving at all. We only do this if there is at least one major
+            // piece left on the board, since otherwise zugzwangs are too dangerous.
+            // FIXME: We also can't null move if we can capture the opponent king.
+            // Since if we do, we won't spot illegal moves that could lead to stalemate.
+            // For now we just solve this by not using null-move in very unbalanced positions.
+            // TODO: We could actually use null-move in QS as well. Not sure it would be very useful.
+            // But still.... We just have to move stand-pat to be before null-move.
+            //if depth > 2 and can_null and any(c in pos.board for c in "RBNQ"):
+            //if depth > 2 and can_null and any(c in pos.board for c in "RBNQ") and abs(pos.score) < 500:
+            if depth > 2 && can_null && pos.score.abs() < 500 {
+                ans.push((
+                    None,
+                    -self.bound(&pos.rotate(true), 1 - gamma, depth - 3, true),
+                ));
+            }
+            // For QSearch we have a different kind of null-move, namely we can just stop
+            // and not capture anything else.
+            if depth == 0 {
+                ans.push((None, pos.score));
+            }
+            // Look for the strongest ove from last time, the hash-move.
+            let mut killer = self.tp_move.get(pos);
+            // If there isn't one, try to find one with a more shallow search.
+            // This is known as Internal Iterative Deepening (IID). We set
+            // can_null=True, since we want to make sure we actually find a move.
+            if killer.is_none() && depth > 2 {
+                self.bound(pos, gamma, depth - 3, false);
+                killer = self.tp_move.get(pos);
+            }
+            // If depth == 0 we only try moves with high intrinsic score (captures and
+            // promotions). Otherwise we do all moves. This is called quiescent search.
+            let val_lower = qs - depth * qs_a;
+            // Only play the move if it would be included at the current val-limit,
+            // since otherwise we'd get search instability.
+            // We will search it again in the main loop below, but the tp will fix
+            // things for us.
+            if let Some(killer_move) = killer {
+                if pos.value(killer_move) >= val_lower {
+                    ans.push((Some(*killer_move), -self.bound(&pos.domove(*killer_move), 1 - gamma, depth - 1, true)));
+                }
+            }
+
+
+            ans
         }
     }
 
