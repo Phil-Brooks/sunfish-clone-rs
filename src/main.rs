@@ -428,16 +428,55 @@ fn main() {
                 return 0;
             }
             // Call moves
-            let moves = Self::moves(self, depth, can_null, pos, gamma);
+            let moves: Vec<(Option<Move>, i32)> = Self::getmoves(self, depth, can_null, pos, gamma);
 
             let mut best = -mate_upper;
-            // First try not moving at all
+            for (mov, score) in moves {
+                best = max(best, score);
+                if best >= gamma {
+                    // Save the move for pv construction and killer heuristic
+                    if mov.is_some() {
+                        self.tp_move.insert(*pos, mov.unwrap());
+                    }
+                    break;
+                }
+            }
+            // Stalemate checking is a bit tricky: Say we failed low, because
+            // we can't (legally) move and so the (real) score is -infty.
+            // At the next depth we are allowed to just return r, -infty <= r < gamma,
+            // which is normally fine.
+            // However, what if gamma = -10 and we don't have any legal moves?
+            // Then the score is actaully a draw and we should fail high!
+            // Thus, if best < gamma and best < 0 we need to double check what we are doing.
 
-            return 0;
+            // We will fix this problem another way: We add the requirement to bound, that
+            // it always returns MATE_UPPER if the king is capturable. Even if another move
+            // was also sufficient to go above gamma. If we see this value we know we are either
+            // mate, or stalemate. It then suffices to check whether we're in check.
+
+            // Note that at low depths, this may not actually be true, since maybe we just pruned
+            // all the legal moves. So sunfish may report "mate", but then after more search
+            // realize it's not a mate after all. That's fair.
+
+            // This is too expensive to test at depth == 0
+            if depth > 2 && best == -mate_upper {
+                let flipped = pos.rotate(true);
+                // Hopefully this is already in the TT because of null-move
+                let in_check = self.bound(&flipped, mate_upper, 0, true) == mate_upper;
+                best = if in_check { -mate_lower } else { 0 };
+            }
+            // Table part 2
+            if best >= gamma {
+                self.tp_score.insert((*pos, depth, can_null), Entry{lower:best, upper:entry.upper});
+            }
+            if best < gamma {
+                self.tp_score.insert((*pos, depth, can_null), Entry{lower:entry.lower, upper:best});
+            }
+            return best;
         }
         // Generator of moves to search in order.
         // This allows us to define the moves, but only calculate them if needed.
-        fn moves(
+        fn getmoves(
             &mut self,
             depth: i32,
             can_null: bool,
@@ -446,6 +485,9 @@ fn main() {
         ) -> Vec<(Option<Move>, i32)> {
             let qs = 40;
             let qs_a = 140;
+            let mate_lower: i32 = piece('K') - 10 * piece('Q');
+            let mate_upper: i32 = piece('K') + 10 * piece('Q');
+
             let mut ans: Vec<(Option<Move>, i32)> = Vec::new();
             // First try not moving at all. We only do this if there is at least one major
             // piece left on the board, since otherwise zugzwangs are too dangerous.
@@ -485,11 +527,41 @@ fn main() {
             // things for us.
             if let Some(killer_move) = killer {
                 if pos.value(killer_move) >= val_lower {
-                    ans.push((Some(*killer_move), -self.bound(&pos.domove(*killer_move), 1 - gamma, depth - 1, true)));
+                    ans.push((
+                        Some(*killer_move),
+                        -self.bound(&pos.domove(*killer_move), 1 - gamma, depth - 1, true),
+                    ));
                 }
             }
-
-
+            let moves_vec = pos.gen_moves();
+            let mut ms1: Vec<(i32, &Move)> = moves_vec.iter().map(|m| (pos.value(m), m)).collect();
+            ms1.sort_by_key(|(v, _)| -v);
+            for (val, mov) in ms1 {
+                // Quiescent search
+                if val < val_lower {
+                    break;
+                }
+                // If the new score is less than gamma, the opponent will for sure just
+                // stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
+                // This is known as futility pruning.
+                if depth <= 1 && pos.score + val < gamma {
+                    // Need special case for MATE, since it would normally be caught
+                    // before standing pat.
+                    let scr = if val < mate_lower {
+                        pos.score + val
+                    } else {
+                        mate_upper
+                    };
+                    ans.push((Some(*mov), scr));
+                    // We can also break, since we have ordered the moves by value,
+                    // so it can't get any better than this.
+                    break;
+                }
+                ans.push((
+                    Some(*mov),
+                    -self.bound(&pos.domove(*mov), 1 - gamma, depth - 1, true),
+                ));
+            }
             ans
         }
     }
