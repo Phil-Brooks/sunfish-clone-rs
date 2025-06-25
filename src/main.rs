@@ -97,9 +97,12 @@ fn main() {
         " PPPPPPPP\n" + //  80 - 89
         " RNBQKBNR\n" + //  90 - 99
         "         \n" + // 100 -109
-        "         \n" // 110 -119
-    ).chars().collect();
-    let initial:[char;120] = letters.try_into().unwrap();
+        "         \n"
+        // 110 -119
+    )
+    .chars()
+    .collect();
+    let initial: [char; 120] = letters.try_into().unwrap();
     // Lists of possible moves for each piece type.
     fn directions(p: char) -> Vec<i32> {
         let (n, e, s, w) = (-10, 1, 10, -1);
@@ -459,10 +462,22 @@ fn main() {
             }
             // Table part 2
             if best >= gamma {
-                self.tp_score.insert((*pos, depth, can_null), Entry{lower:best, upper:entry.upper});
+                self.tp_score.insert(
+                    (*pos, depth, can_null),
+                    Entry {
+                        lower: best,
+                        upper: entry.upper,
+                    },
+                );
             }
             if best < gamma {
-                self.tp_score.insert((*pos, depth, can_null), Entry{lower:entry.lower, upper:best});
+                self.tp_score.insert(
+                    (*pos, depth, can_null),
+                    Entry {
+                        lower: entry.lower,
+                        upper: best,
+                    },
+                );
             }
             return best;
         }
@@ -556,7 +571,7 @@ fn main() {
             }
             ans
         }
-        fn search(&mut self,history:Vec<Position>) -> Vec<(i32,i32,i32,Move)>{
+        fn search(&mut self, history: Vec<Position>) -> Vec<(i32, i32, i32, Move)> {
             let mate_lower: i32 = piece('K') - 10 * piece('Q');
             let eval_roughness = 15;
             let mut ans = Vec::new();
@@ -571,13 +586,18 @@ fn main() {
                 // 'while lower != upper' would work, but it's too much effort to spend
                 // on what's probably not going to change the move played.
                 let (mut lower, mut upper) = (-mate_lower, mate_lower);
-                while lower < upper - eval_roughness{
+                while lower < upper - eval_roughness {
                     let score = self.bound(&history[history.len() - 1], gamma, depth, false);
-                    let mv = *self.tp_move.get(&history[history.len() - 1]).expect("move not in table");
-                    if score >= gamma{
-                        lower = score;}
-                    if score < gamma{
-                        upper = score;}
+                    let mv = *self
+                        .tp_move
+                        .get(&history[history.len() - 1])
+                        .expect("move not in table");
+                    if score >= gamma {
+                        lower = score;
+                    }
+                    if score < gamma {
+                        upper = score;
+                    }
                     ans.push((depth, gamma, score, mv));
                     gamma = (lower + upper + 1) / 2;
                 }
@@ -594,23 +614,39 @@ fn main() {
         let rank = (c[1].to_digit(10).unwrap() as i32) - 1;
         return a1 + fil - 10 * rank;
     }
-    fn divmod(a: i32, b: i32) -> (i32, i32) {
-        (a / b, a % b)
+    fn chr(val: usize) -> String {
+        //let chrs = b'a'..=b'h';
+        //if val < 1 || val > 8 {
+        //    return " ".to_string(); // Invalid input
+        //}
+        //(chrs.clone().nth(val - 1).unwrap() as char).to_string()
+        let i:u8 = 96 + val as u8;
+        (i as char).to_string()
+    }
+    fn render(i: usize) -> String {
+        let h1: usize = 98;
+        let rank = (h1 - i) / 10;
+        let fil = i % 10;
+        chr(fil) + &((rank + 1).to_string())
+    }
+    let mut hist: Vec<Position> = vec![Position {
+        board: initial,
+        score: 0,
+        wc: (true, true),
+        bc: (true, true),
+        ep: 0,
+        kp: 0,
+    }];
+    fn render_move(mov: Option<Move>, white_pov: bool) -> String {
+        if mov.is_none() {
+            return "(none)".to_string();
+        }
+        let (mut i, mut j) = (mov.unwrap().i, mov.unwrap().j);
+        if !white_pov {
+            (i, j) = (119 - i, 119 - j);
+        }
+        return render(i) + &render(j) + &mov.unwrap().prom.to_ascii_lowercase().to_string();
     }
 
-    fn chr(val: i32) -> String {
-        std::char::from_u32(val as u32).unwrap().to_string()
-    }
-    fn ord(c: &str) -> i32 {
-        c.chars().next().unwrap() as i32
-    }
-    fn render(i: i32) -> String {
-        let (a1, h1, a8, h8) = (91, 98, 21, 28);
-        let (rank, fil) = divmod(i - a1, 10);
-        chr(fil + ord("a")) + &((-rank + 1).to_string())
-    }
-    let mut hist: Vec<Position> = vec![Position{board: initial, score: 0, wc: (true, true), bc: (true, true), ep: 0, kp: 0}];
-
-    
-    println!("Hello, world!");
+    println!("{} {} {} {} {}", render(91), render(98), render(21), render(28), render(76));
 }
