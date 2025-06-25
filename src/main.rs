@@ -647,6 +647,15 @@ fn main() {
         }
         return render(i) + &render(j) + &mov.unwrap().prom.to_ascii_lowercase().to_string();
     }
+    fn parse_move(move_str:[char;5], white_pov:bool)-> Move{
+        let mut i = parse([move_str[0], move_str[1]]);
+        let mut j = parse([move_str[2], move_str[3]]);
+        let prom = move_str[4].to_ascii_uppercase();
+        if !white_pov {
+            (i, j) = (119 - i, 119 - j);
+        }
+        Move { i: i as usize, j: j as usize, prom }
+    }
 
     println!("{} {} {} {} {}", render(91), render(98), render(21), render(28), render(76));
     println!(
@@ -657,4 +666,14 @@ fn main() {
         parse(['h', '8']),
         parse(['f', '3'])
     );
+    let mut mov = Move{i: 81, j: 61, prom: ' '};
+    println!("{}", render_move(Some(mov), true));
+    println!("{}", render_move(Some(mov), false));
+    mov = Move{i: 31, j: 21, prom: 'Q'};
+    println!("{}", render_move(Some(mov), true));
+    println!("{}", render_move(Some(mov), false));
+    let move_str = ['a', '7', 'a', '8', 'q'];
+    let parsed_move = parse_move(move_str, true);
+    println!("Parsed move: i={}, j={}, prom={}", parsed_move.i, parsed_move.j, parsed_move.prom);
+    println!("{}", render_move(Some(parsed_move), true));
 }
