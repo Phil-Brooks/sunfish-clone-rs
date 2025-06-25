@@ -649,4 +649,12 @@ fn main() {
     }
 
     println!("{} {} {} {} {}", render(91), render(98), render(21), render(28), render(76));
+    println!(
+        "{} {} {} {} {}",
+        parse(['a', '1']),
+        parse(['h', '1']),
+        parse(['a', '8']),
+        parse(['h', '8']),
+        parse(['f', '3'])
+    );
 }
