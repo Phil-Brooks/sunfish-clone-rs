@@ -2,7 +2,6 @@
 // rust specifics will only be used where absolutely needed.
 use std::cmp::max;
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 const VERSION: &str = "sunfish 2023";
 
@@ -86,7 +85,6 @@ fn main() {
     //###############################################################################
     // Our board is represented as a 120 character string. The padding allows for
     // fast detection of moves that don't stay within the board.
-    let (a1, h1, a8, h8) = (91, 98, 21, 28);
     let initial = "         \n".to_owned() + //   0 -  9
         "         \n" + //  10 - 19
         " rnbqkbnr\n" + //  20 - 29
@@ -126,15 +124,7 @@ fn main() {
     // 8 queens up, but we got the king, we still exceed MATE_VALUE.
     // When a MATE is detected, we'll set the score to MATE_UPPER - plies to get there
     // E.g. Mate in 3 will be MATE_UPPER - 6
-    let mate_lower: i32 = piece('K') - 10 * piece('Q');
-    let mate_upper: i32 = piece('K') + 10 * piece('Q');
     // Constants for tuning search
-    let qs = 40;
-    let qs_a = 140;
-    let eval_roughness = 15;
-    let qs_lim = (0, 300);
-    let qs_a_lim = (0, 300);
-    let eval_roughness_lim = (0, 50);
     //###############################################################################
     // Chess logic
     //###############################################################################
@@ -157,7 +147,7 @@ fn main() {
     impl Position {
         fn gen_moves(&self) -> Vec<Move> {
             let (a1, h1, a8, h8) = (91, 98, 21, 28);
-            let (n, e, s, w) = (-10, 1, 10, -1);
+            let (n, e, w) = (-10, 1, -1);
 
             let mut moves = Vec::new();
             for i in 0..120 {
@@ -264,10 +254,9 @@ fn main() {
         }
         fn domove(&self, mov: Move) -> Position {
             let (a1, h1, a8, h8) = (91, 98, 21, 28);
-            let (n, e, s, w) = (-10i32, 1, 10i32, -1);
+            let (n, s) = (-10i32, 10i32);
             let (i, j) = (mov.i, mov.j);
             let p = self.board[i];
-            let q = self.board[j];
             let put_ = |mut board: [char; 120], i: usize, p: char| -> [char; 120] {
                 board[i] = p;
                 board
@@ -329,7 +318,7 @@ fn main() {
         }
         fn value(&self, mov: &Move) -> i32 {
             let (a1, h1, a8, h8) = (91, 98, 21, 28);
-            let (n, e, s, w) = (-10i32, 1, 10i32, -1);
+            let s = 10i32;
             let (i, j) = (mov.i, mov.j);
             let p = self.board[i];
             let q = self.board[j];
@@ -373,7 +362,7 @@ fn main() {
     struct Searcher {
         tp_score: HashMap<(Position, i32, bool), Entry>,
         tp_move: HashMap<Position, Move>,
-        history: HashSet<Position>,
+        history: Vec<Position>,
         nodes: u32,
     }
     impl Searcher {
@@ -381,7 +370,7 @@ fn main() {
             Searcher {
                 tp_score: HashMap::new(),
                 tp_move: HashMap::new(),
-                history: HashSet::new(),
+                history: Vec::new(),
                 nodes: 0,
             }
         }
@@ -561,6 +550,34 @@ fn main() {
                     Some(*mov),
                     -self.bound(&pos.domove(*mov), 1 - gamma, depth - 1, true),
                 ));
+            }
+            ans
+        }
+        fn search(&mut self,history:Vec<Position>) -> Vec<(i32,i32,i32,Move)>{
+            let mate_lower: i32 = piece('K') - 10 * piece('Q');
+            let eval_roughness = 15;
+            let mut ans = Vec::new();
+            // Iterative deepening MTD-bi search
+            self.nodes = 0;
+            self.history = history.clone();
+            self.tp_score.clear();
+            let mut gamma = 0;
+            for depth in 1..1000 {
+                // The inner loop is a binary search on the score of the position.
+                // Inv: lower <= score <= upper
+                // 'while lower != upper' would work, but it's too much effort to spend
+                // on what's probably not going to change the move played.
+                let (mut lower, mut upper) = (-mate_lower, mate_lower);
+                while lower < upper - eval_roughness{
+                    let score = self.bound(&history[history.len() - 1], gamma, depth, false);
+                    let mv = *self.tp_move.get(&history[history.len() - 1]).expect("move not in table");
+                    if score >= gamma{
+                        lower = score;}
+                    if score < gamma{
+                        upper = score;}
+                    ans.push((depth, gamma, score, mv));
+                    gamma = (lower + upper + 1) / 2;
+                }
             }
             ans
         }
