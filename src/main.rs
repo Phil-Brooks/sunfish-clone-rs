@@ -85,7 +85,8 @@ fn main() {
     //###############################################################################
     // Our board is represented as a 120 character string. The padding allows for
     // fast detection of moves that don't stay within the board.
-    let initial = "         \n".to_owned() + //   0 -  9
+    let letters: Vec<char> = (
+        "         \n".to_owned() + //   0 -  9
         "         \n" + //  10 - 19
         " rnbqkbnr\n" + //  20 - 29
         " pppppppp\n" + //  30 - 39
@@ -96,7 +97,9 @@ fn main() {
         " PPPPPPPP\n" + //  80 - 89
         " RNBQKBNR\n" + //  90 - 99
         "         \n" + // 100 -109
-        "         \n"; // 110 -119
+        "         \n" // 110 -119
+    ).chars().collect();
+    let initial:[char;120] = letters.try_into().unwrap();
     // Lists of possible moves for each piece type.
     fn directions(p: char) -> Vec<i32> {
         let (n, e, s, w) = (-10, 1, 10, -1);
@@ -582,6 +585,32 @@ fn main() {
             ans
         }
     }
+    //###############################################################################
+    // UCI User interface
+    //###############################################################################
+    fn parse(c: [char; 2]) -> i32 {
+        let a1 = 91;
+        let fil = (c[0] as u8 - b'a') as i32;
+        let rank = (c[1].to_digit(10).unwrap() as i32) - 1;
+        return a1 + fil - 10 * rank;
+    }
+    fn divmod(a: i32, b: i32) -> (i32, i32) {
+        (a / b, a % b)
+    }
 
+    fn chr(val: i32) -> String {
+        std::char::from_u32(val as u32).unwrap().to_string()
+    }
+    fn ord(c: &str) -> i32 {
+        c.chars().next().unwrap() as i32
+    }
+    fn render(i: i32) -> String {
+        let (a1, h1, a8, h8) = (91, 98, 21, 28);
+        let (rank, fil) = divmod(i - a1, 10);
+        chr(fil + ord("a")) + &((-rank + 1).to_string())
+    }
+    let mut hist: Vec<Position> = vec![Position{board: initial, score: 0, wc: (true, true), bc: (true, true), ep: 0, kp: 0}];
+
+    
     println!("Hello, world!");
 }
