@@ -248,7 +248,7 @@ fn main() {
         fn swap_case(board: [char; 120]) -> [char; 120] {
             let mut new_board = [' '; 120];
             for (i, &c) in board.iter().enumerate() {
-                new_board[i] = if c.is_ascii_lowercase() {
+                new_board[119-i] = if c.is_ascii_lowercase() {
                     c.to_ascii_uppercase()
                 } else if c.is_ascii_uppercase() {
                     c.to_ascii_lowercase()
@@ -638,10 +638,15 @@ fn main() {
         }
         return render(i) + &render(j) + &mov.unwrap().prom.to_ascii_lowercase().to_string();
     }
-    fn parse_move(move_str: [char; 5], white_pov: bool) -> Move {
-        let mut i = parse([move_str[0], move_str[1]]);
-        let mut j = parse([move_str[2], move_str[3]]);
-        let prom = move_str[4].to_ascii_uppercase();
+    fn parse_move(move_str: &str, white_pov: bool) -> Move {
+        let chars: Vec<char> = move_str.chars().collect();
+        let mut i = parse([chars[0], chars[1]]);
+        let mut j = parse([chars[2], chars[3]]);
+        let prom = if chars.len() > 4 {
+            chars[4].to_ascii_uppercase()
+        } else {
+            ' '
+        };
         if !white_pov {
             (i, j) = (119 - i, 119 - j);
         }
@@ -810,7 +815,7 @@ fn main() {
         let (qs_a_min, qs_a_max) = (0, 300);
         let (eval_roughness_min, eval_roughness_max) = (0, 50);
         let debug = false;
-        let hist = vec![startpos];
+        let mut hist = vec![startpos];
         let searcher = Searcher::new();
         loop {
             let line = input();
@@ -855,6 +860,12 @@ fn main() {
             // See: https://talkchess.com/forum3/viewtopic.php?f=7&t=81233&start=10
             if args[0] == "isready" {
                 println!("readyok")
+            }
+            if args[0] == "position" && args[1] == "startpos" {
+                hist = vec![startpos];
+                for (ply, mov) in args[3..].iter().enumerate() {
+                    hist.push(hist[hist.len() - 1].domove(parse_move(mov, ply % 2 == 0)));
+                }
             }
         }
     }
