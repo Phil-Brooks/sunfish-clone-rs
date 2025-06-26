@@ -364,7 +364,6 @@ fn main() {
         lower: i32,
         upper: i32,
     }
-
     struct Searcher {
         tp_score: HashMap<(Position, i32, bool), Entry>,
         tp_move: HashMap<Position, Move>,
@@ -620,7 +619,7 @@ fn main() {
         //    return " ".to_string(); // Invalid input
         //}
         //(chrs.clone().nth(val - 1).unwrap() as char).to_string()
-        let i:u8 = 96 + val as u8;
+        let i: u8 = 96 + val as u8;
         (i as char).to_string()
     }
     fn render(i: usize) -> String {
@@ -647,33 +646,137 @@ fn main() {
         }
         return render(i) + &render(j) + &mov.unwrap().prom.to_ascii_lowercase().to_string();
     }
-    fn parse_move(move_str:[char;5], white_pov:bool)-> Move{
+    fn parse_move(move_str: [char; 5], white_pov: bool) -> Move {
         let mut i = parse([move_str[0], move_str[1]]);
         let mut j = parse([move_str[2], move_str[3]]);
         let prom = move_str[4].to_ascii_uppercase();
         if !white_pov {
             (i, j) = (119 - i, 119 - j);
         }
-        Move { i: i as usize, j: j as usize, prom }
+        Move {
+            i: i as usize,
+            j: j as usize,
+            prom,
+        }
+    }
+    fn go_loop(
+        mut searcher: Searcher,
+        hist: Vec<Position>,
+        max_movetime: i32,
+        max_depth: i32,
+        debug: bool,
+    ) -> () {
+        if debug {
+            println!("Going movetime={max_movetime}, depth={max_depth}");
+        }
+        let start = std::time::Instant::now();
+        for (depth, gamma, score, mov) in searcher.search(hist) {
+            // Our max_depth implementation is a bit wasteful.
+            // We never know when we've seen the last at a certain depth
+            // before we get to the next one
+            if depth - 1 >= max_depth {
+                break;
+            }
+            let elapsed = std::time::Instant::now() - start;
+            if score >= gamma {
+                let pv = "TODO";
+                println!(
+                    "info depth {} time {} nodes {} nps {} score cp {} lowerbound pv {}",
+                    depth,
+                    (1000.0 * elapsed.as_secs_f64()).round() as u64,
+                    searcher.nodes,
+                    if elapsed.as_secs_f64() > 0.0 {
+                        (searcher.nodes as f64 / elapsed.as_secs_f64()).round() as u64
+                    } else {
+                        0
+                    },
+                    score,
+                    pv
+                );
+            } else {
+                println!(
+                    "info depth {} time {} nodes {} nps {} score cp {} upperbound",
+                    depth,
+                    (1000.0 * elapsed.as_secs_f64()).round() as u64,
+                    searcher.nodes,
+                    if elapsed.as_secs_f64() > 0.0 {
+                        (searcher.nodes as f64 / elapsed.as_secs_f64()).round() as u64
+                    } else {
+                        0
+                    },
+                    score
+                );
+                // We may not have a move yet at depth = 1
+                if depth > 1
+                    && elapsed > std::time::Duration::from_millis((max_movetime * 2 / 3) as u64)
+                {
+                    break;
+                }
+            }
+        }
+        // FIXME: If we are in "go infinite" we aren't actually supposed to stop the
+        // go-loop before we got stop_event. Unfortunately we currently don't know if
+        // we are in "go infinite" since it's simply translated to "go depth 100".
+        let my_pv = ["TODO"]; //pv(searcher, hist[-1], include_scores=False)
+        println!(
+            "bestmove {}",
+            if !my_pv.is_empty() {
+                my_pv[0]
+            } else {
+                "(none)"
+            }
+        );
+    }
+    fn mate_loop(
+        mut searcher: Searcher,
+        hist: Vec<Position>,
+        max_movetime: i32,
+        max_depth: i32,
+        find_draw: bool,
+    ) -> () {
+        let mate_lower: i32 = piece('K') - 10 * piece('Q');
+        let start = std::time::Instant::now();
+        for d in 1..max_depth + 1 {
+            if find_draw {
+                let s0 = searcher.bound(&hist[hist.len() - 1], 0, d, true);
+                let mut elapsed = std::time::Instant::now() - start;
+                println!("info depth {} score lowerbound cp {}", d, s0);
+                let s1 = searcher.bound(&hist[hist.len() - 1], 1, d, true);
+                elapsed = std::time::Instant::now() - start;
+                println!("info depth {} score lowerbound cp {}", d, s1);
+                if s0 >= 0 && s1 < 1 {
+                    break;
+                }
+            } else {
+                let score = searcher.bound(&hist[hist.len() - 1], mate_lower, d, true);
+                let elapsed = std::time::Instant::now() - start;
+                let pv = "TODO"; //pv(searcher, hist[-1], include_scores=False)
+                println!(
+                    "info depth {} score lowerbound cp {} time {} pv {}",
+                    d,
+                    score,
+                    (1000.0 * elapsed.as_secs_f64()).round() as u64,
+                    pv
+                );
+                if score >= mate_lower {
+                    break;
+                }
+            }
+            let elapsed = std::time::Instant::now() - start;
+            if elapsed > std::time::Duration::from_millis(max_movetime as u64) {
+                break;
+            }
+        }
+        let mov = searcher.tp_move.get(&hist[hist.len() - 1]).copied();
+        let move_str = render_move(mov, (hist.len()) % 2 == 1);
+        println!("bestmove {}", move_str);
     }
 
-    println!("{} {} {} {} {}", render(91), render(98), render(21), render(28), render(76));
-    println!(
-        "{} {} {} {} {}",
-        parse(['a', '1']),
-        parse(['h', '1']),
-        parse(['a', '8']),
-        parse(['h', '8']),
-        parse(['f', '3'])
-    );
-    let mut mov = Move{i: 81, j: 61, prom: ' '};
-    println!("{}", render_move(Some(mov), true));
-    println!("{}", render_move(Some(mov), false));
-    mov = Move{i: 31, j: 21, prom: 'Q'};
-    println!("{}", render_move(Some(mov), true));
-    println!("{}", render_move(Some(mov), false));
     let move_str = ['a', '7', 'a', '8', 'q'];
     let parsed_move = parse_move(move_str, true);
-    println!("Parsed move: i={}, j={}, prom={}", parsed_move.i, parsed_move.j, parsed_move.prom);
+    println!(
+        "Parsed move: i={}, j={}, prom={}",
+        parsed_move.i, parsed_move.j, parsed_move.prom
+    );
     println!("{}", render_move(Some(parsed_move), true));
 }
