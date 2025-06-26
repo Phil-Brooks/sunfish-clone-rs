@@ -628,14 +628,6 @@ fn main() {
         let fil = i % 10;
         chr(fil) + &((rank + 1).to_string())
     }
-    let mut hist: Vec<Position> = vec![Position {
-        board: initial,
-        score: 0,
-        wc: (true, true),
-        bc: (true, true),
-        ep: 0,
-        kp: 0,
-    }];
     fn render_move(mov: Option<Move>, white_pov: bool) -> String {
         if mov.is_none() {
             return "(none)".to_string();
@@ -800,9 +792,54 @@ fn main() {
         }
         println!("Nodes searched: {}", total);
     }
+    fn input() -> String {
+        use std::io::{self, Write};
+        let mut s = String::new();
+        io::stdout().flush().unwrap();
+        io::stdin().read_line(&mut s).expect("Failed to read line");
+        s.trim().to_string()
+    }
+    fn run(startpos: Position) -> () {
+        let qs_name = "QS";
+        let qs_a_name = "QS_A";
+        let eval_roughness_name = "EVAL_ROUGHNESS";
+        let qs = 40;
+        let qs_a = 140;
+        let eval_roughness = 15;
+        let (qs_min, qs_max) = (0, 300);
+        let (qs_a_min, qs_a_max) = (0, 300);
+        let (eval_roughness_min, eval_roughness_max) = (0, 50);
+        let debug = false;
+        let hist = vec![startpos];
+        let searcher = Searcher::new();
+        loop {
+            let line = input();
+            let args: Vec<&str> = line.split_whitespace().collect();
+            if args.len() == 0 {
+                continue;
+            }
+            if args[0] == "quit" {
+                break;
+            }
+            if args[0] == "uci" {
+                println!("id name {}", VERSION);
+                println!(
+                    "option name {} type spin default {} min {} max {}",
+                    qs_name, qs, qs_min, qs_max
+                );
+                println!(
+                    "option name {} type spin default {} min {} max {}",
+                    qs_a_name, qs_a, qs_a_min, qs_a_max
+                );
+                println!(
+                    "option name {} type spin default {} min {} max {}",
+                    eval_roughness_name, eval_roughness, eval_roughness_min, eval_roughness_max
+                );
+                println!("uciok");
+            }
+        }
+    }
 
-
-    
     fn get_color(pos: &Position) -> i32 {
         //A slightly hacky way to to get the color from a sunfish position
         if pos.board[0] == '\n' { 1 } else { 0 }
@@ -827,4 +864,15 @@ fn main() {
         parsed_move.i, parsed_move.j, parsed_move.prom
     );
     println!("{}", render_move(Some(parsed_move), true));
+
+    let mut hist: Vec<Position> = vec![Position {
+        board: initial,
+        score: 0,
+        wc: (true, true),
+        bc: (true, true),
+        ep: 0,
+        kp: 0,
+    }];
+
+    run(hist[hist.len() - 1].clone());
 }
