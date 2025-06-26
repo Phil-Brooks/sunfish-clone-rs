@@ -803,9 +803,9 @@ fn main() {
         let qs_name = "QS";
         let qs_a_name = "QS_A";
         let eval_roughness_name = "EVAL_ROUGHNESS";
-        let qs = 40;
-        let qs_a = 140;
-        let eval_roughness = 15;
+        let mut qs = 40;
+        let mut qs_a = 140;
+        let mut eval_roughness = 15;
         let (qs_min, qs_max) = (0, 300);
         let (qs_a_min, qs_a_max) = (0, 300);
         let (eval_roughness_min, eval_roughness_max) = (0, 50);
@@ -837,6 +837,25 @@ fn main() {
                 );
                 println!("uciok");
             }
+            if args[0] == "setoption" {
+                let uci_key = args[2];
+                let uci_val: i32 = args[4].parse::<i32>().unwrap();
+                if uci_key == qs_name {
+                    qs = uci_val;
+                } else if uci_key == qs_a_name {
+                    qs_a = uci_val;
+                } else if uci_key == eval_roughness_name {
+                    eval_roughness = uci_val;
+                } else {
+                    println!("Unknown option: {}", uci_key);
+                    continue;
+                }
+            }
+            // FIXME: It seems we should reply to "isready" even while thinking.
+            // See: https://talkchess.com/forum3/viewtopic.php?f=7&t=81233&start=10
+            if args[0] == "isready" {
+                println!("readyok")
+            }
         }
     }
 
@@ -857,15 +876,7 @@ fn main() {
         return false;
     }
 
-    let move_str = ['a', '7', 'a', '8', 'q'];
-    let parsed_move = parse_move(move_str, true);
-    println!(
-        "Parsed move: i={}, j={}, prom={}",
-        parsed_move.i, parsed_move.j, parsed_move.prom
-    );
-    println!("{}", render_move(Some(parsed_move), true));
-
-    let mut hist: Vec<Position> = vec![Position {
+    let hist: Vec<Position> = vec![Position {
         board: initial,
         score: 0,
         wc: (true, true),
