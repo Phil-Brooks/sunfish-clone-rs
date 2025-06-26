@@ -771,6 +771,54 @@ fn main() {
         let move_str = render_move(mov, (hist.len()) % 2 == 1);
         println!("bestmove {}", move_str);
     }
+    fn _perft_count(pos: &Position, depth: i32) -> i32 {
+        // Check that we didn't get to an illegal position
+        if can_kill_king(pos) {
+            return -1;
+        }
+        if depth == 0 {
+            return 1;
+        }
+        let mut res = 0;
+        for mov in pos.gen_moves() {
+            let cnt = _perft_count(&(pos.domove(mov)), depth - 1);
+            if cnt != -1 {
+                res += cnt
+            }
+        }
+        return res;
+    }
+    fn perft(pos: &Position, depth: i32) -> () {
+        let mut total = 0;
+        for mov in pos.gen_moves() {
+            let move_uci = render_move(Some(mov), get_color(pos) == 0);
+            let cnt = _perft_count(&pos.domove(mov), depth - 1);
+            if cnt != -1 {
+                println!("{move_uci}: {cnt}");
+                total += cnt;
+            }
+        }
+        println!("Nodes searched: {}", total);
+    }
+
+
+    
+    fn get_color(pos: &Position) -> i32 {
+        //A slightly hacky way to to get the color from a sunfish position
+        if pos.board[0] == '\n' { 1 } else { 0 }
+    }
+    fn can_kill_king(pos: &Position) -> bool {
+        // If we just checked for opponent moves capturing the king, we would miss
+        // captures in case of illegal castling.
+        //MATE_LOWER = 60_000 - 10 * 929
+        //return any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
+        for m in pos.gen_moves() {
+            if pos.board[m.j] == 'k' || ((m.j as isize - pos.kp as isize).abs() < 2) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     let move_str = ['a', '7', 'a', '8', 'q'];
     let parsed_move = parse_move(move_str, true);
