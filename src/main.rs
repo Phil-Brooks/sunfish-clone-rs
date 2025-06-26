@@ -228,7 +228,7 @@ fn main() {
         }
         fn rotate(&self, nullmove: bool) -> Position {
             Position {
-                board: Self::swap_case(self.board),
+                board: Self::swap_player(self.board),
                 score: -self.score,
                 wc: self.wc,
                 bc: self.bc,
@@ -245,7 +245,7 @@ fn main() {
             }
         }
         // Helper function to swap the case of each character in the board array
-        fn swap_case(board: [char; 120]) -> [char; 120] {
+        fn swap_player(board: [char; 120]) -> [char; 120] {
             let mut new_board = [' '; 120];
             for (i, &c) in board.iter().enumerate() {
                 new_board[119-i] = if c.is_ascii_lowercase() {
@@ -867,8 +867,48 @@ fn main() {
                     hist.push(hist[hist.len() - 1].domove(parse_move(mov, ply % 2 == 0)));
                 }
             }
+            if args[0] == "position" && args[1] == "fen" {
+                let pos = from_fen(*args[2..8]);
+                let hist = if get_color(&pos) == 0 {vec![pos]}  else {vec![pos.rotate(false), pos]};
+                if args.len() > 8 {
+                    for (ply, mov) in args[9..].iter().enumerate() {
+                        hist.push(hist[hist.len() - 1].domove(parse_move(mov, hist.len() % 2 == 1)));
+                    }
+                }
+            }
+
+
         }
     }
+
+    fn from_fen(board:&str, color:&str, castling:&str, enpas:&str, _hclock:&str, _fclock:&str) -> Position {
+        let mut iboard = board.to_string();
+/*         board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
+        board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
+        board[9::10] = ["\n"] * 12
+        board = "".join(board)
+        wc = ("Q" in castling, "K" in castling)
+        bc = ("k" in castling, "q" in castling)
+        ep = sunfish.parse(enpas) if enpas != "-" else 0
+        if hasattr(sunfish, 'features'):
+            wf, bf = sunfish.features(board)
+            pos = sunfish.Position(board, 0, wf, bf, wc, bc, ep, 0)
+            pos = pos._replace(score=pos.calculate_score())
+        else:
+            score = sum(sunfish.pst[c][i] for i, c in enumerate(board) if c.isupper())
+            score -= sum(sunfish.pst[c.upper()][119-i] for i, c in enumerate(board) if c.islower())
+            pos = sunfish.Position(board, score, wc, bc, ep, 0)
+        return pos if color == 'w' else pos.rotate()
+ */        return Position {
+                board: iboard.chars().collect::<Vec<char>>().try_into().unwrap(),
+                score: 0,
+                wc: (true, true),
+                bc: (true, true),
+                ep: 0,
+                kp: 0,
+            }
+    }
+
 
     fn get_color(pos: &Position) -> i32 {
         //A slightly hacky way to to get the color from a sunfish position
