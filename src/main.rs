@@ -657,7 +657,7 @@ fn main() {
         }
     }
     fn go_loop(
-        mut searcher: Searcher,
+        searcher: &mut Searcher,
         hist: Vec<Position>,
         max_movetime: i32,
         max_depth: i32,
@@ -816,7 +816,7 @@ fn main() {
         let (eval_roughness_min, eval_roughness_max) = (0, 50);
         let debug = false;
         let mut hist = vec![startpos];
-        let searcher = Searcher::new();
+        let mut searcher = Searcher::new();
         loop {
             let line = input();
             let args: Vec<&str> = line.split_whitespace().collect();
@@ -883,6 +883,22 @@ fn main() {
                     }
                 }
             }
+            if args[0] == "go" {
+                let think = 10^6;
+                let max_depth = 100;
+                if args.len() > 1 && args[1] == "infinite" {
+                    go_loop(&mut searcher, hist.clone(), think, max_depth, debug);
+                } else if args.len() > 1 && args[1] == "movetime" {
+                    let max_movetime: i32 = args[2].parse::<i32>().unwrap();
+                    go_loop(&mut searcher, hist.clone(), max_movetime, max_depth, debug);
+                } else if args.len() > 1 && args[1] == "depth" {
+                    let max_depth: i32 = args[2].parse::<i32>().unwrap();
+                    go_loop(&mut searcher, hist.clone(), think, max_depth, debug);
+                } else {
+                    println!("Unknown go command: {}", line);
+                }
+            }
+
         }
     }
 
@@ -934,7 +950,6 @@ fn main() {
             return pos.rotate(false);
         }
     }
-
     fn get_color(pos: &Position) -> i32 {
         //A slightly hacky way to to get the color from a sunfish position
         if pos.board[0] == '\n' { 1 } else { 0 }
