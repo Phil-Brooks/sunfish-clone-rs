@@ -1,6 +1,6 @@
 // this is intended to be an exact replica of sunfish from https://github.com/thomasahle/sunfish
 // rust specifics will only be used where absolutely needed.
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::collections::HashMap;
 
 const VERSION: &str = "sunfish 2023";
@@ -706,13 +706,14 @@ fn main() {
                         },
                         score
                     );
-                    // We may not have a move yet at depth = 1
-                    if depth > 1
-                        && elapsed > std::time::Duration::from_secs((max_movetime * 2 / 3) as u64)
-                    {
-                        break;
-                    }
                 }
+            }
+            // We may not have a move yet at depth = 1
+            let elapsed = std::time::Instant::now() - start;
+            if idepth > 1
+                && elapsed > std::time::Duration::from_millis((max_movetime * 2 / 3) as u64)
+            {
+                break;
             }
         }
         // FIXME: If we are in "go infinite" we aren't actually supposed to stop the
@@ -889,12 +890,36 @@ fn main() {
                 }
             }
             if args[0] == "go" {
-                let think = 100 ^ 6;
+                let think = i32::pow(10, 6);
                 let max_depth = 30;
                 if args.len() > 1 && args[1] == "infinite" {
                     go_loop(&mut searcher, &hist, think, max_depth, debug);
                 } else if args.len() > 1 && args[1] == "movetime" {
                     let max_movetime: i32 = args[2].parse::<i32>().unwrap();
+                    go_loop(&mut searcher, &hist, max_movetime, max_depth, debug);
+                } else if args.len() > 1 && args[1] == "wtime" {
+                    let mut wtime: i32 = args[2].parse::<i32>().unwrap();
+                    let btime: i32 = args[4].parse::<i32>().unwrap();
+                    let mut winc: i32 = if args.len() > 6 {
+                        args[6].parse::<i32>().unwrap()
+                    } else {
+                        0
+                    };
+                    let binc: i32 = if args.len() > 8 {
+                        args[8].parse::<i32>().unwrap()
+                    } else {
+                        0
+                    };
+                    // we always consider ourselves white, but uci doesn't
+                    if hist.len() % 2 == 0 {
+                        wtime = btime;
+                        winc = binc;
+                    }
+                    let mut max_movetime = min(wtime / 40 + winc, wtime / 2 - 1);
+                    // let's go fast for the first moves
+                    if hist.len() < 3 {
+                        max_movetime = min(think, 1);
+                    }
                     go_loop(&mut searcher, &hist, max_movetime, max_depth, debug);
                 } else if args.len() > 1 && args[1] == "depth" {
                     let max_depth: i32 = args[2].parse::<i32>().unwrap();
