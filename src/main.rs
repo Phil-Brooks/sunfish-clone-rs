@@ -730,8 +730,8 @@ fn main() {
         );
     }
     fn mate_loop(
-        mut searcher: Searcher,
-        hist: Vec<Position>,
+        searcher: &mut Searcher,
+        hist: &Vec<Position>,
         max_movetime: i32,
         max_depth: i32,
         find_draw: bool,
@@ -924,6 +924,15 @@ fn main() {
                 } else if args.len() > 1 && args[1] == "depth" {
                     let max_depth: i32 = args[2].parse::<i32>().unwrap();
                     go_loop(&mut searcher, &hist, think, max_depth, debug);
+                } else if args.len() > 1 && args[1] == "mate" {
+                    let max_depth: i32 = args[2].parse::<i32>().unwrap();
+                    mate_loop(&mut searcher, &hist, think, max_depth, false);
+                } else if args.len() > 1 && args[1] == "draw" {
+                    let max_depth: i32 = args[2].parse::<i32>().unwrap();
+                    mate_loop(&mut searcher, &hist, think, max_depth, true);
+                } else if args.len() > 1 && args[1] == "perft" {
+                    let depth: i32 = args[2].parse::<i32>().unwrap();
+                    perft(&hist[hist.len() - 1], depth);
                 } else {
                     println!("Unknown go command: {}", line);
                 }
