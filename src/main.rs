@@ -163,64 +163,64 @@ fn main() {
                 }
                 let directions = directions(p);
                 for &d in &directions {
-                    let j = i + d as usize;
-                    let q = self.board[j];
-                    // Stay inside the board, and off friendly pieces
-                    if q.is_ascii_uppercase() || q.is_whitespace() {
-                        break; // skip moves that capture own pieces
-                    }
-                    if p == 'P' {
-                        if [n, n + n].contains(&d) && q != '.' {
-                            break;
+                    let mut j = i;
+                    loop {
+                        j = (j as i32 + d) as usize;
+                        let q = self.board[j];
+                        // Stay inside the board, and off friendly pieces
+                        if q.is_ascii_uppercase() || q.is_whitespace() || q == '\n' {
+                            break; // skip moves that capture own pieces
                         }
-                        if d == (n + n)
-                            && (i < (a1 as i32 + n) as usize
-                                || self.board[(i as i32 + n) as usize] != '.')
-                        {
-                            break;
-                        }
-                        if [n + w, n + e].contains(&d)
-                            && q == '.'
-                            && [self.ep, self.kp, self.kp - 1, self.kp + 1].contains(&j)
-                        {
-                            break;
-                        }
-                        // If we move to the last row, we can be anything
-                        if a8 <= j && j <= h8 {
-                            for prom in "NBRQ".chars() {
-                                moves.push(Move {
-                                    i: i,
-                                    j: j,
-                                    prom: prom,
-                                });
+                        if p == 'P' {
+                            if [n, n + n].contains(&d) && q != '.' {
+                                break;
                             }
+                            if d == (n + n)
+                                && (i < (a1 as i32 + n) as usize
+                                    || self.board[(i as i32 + n) as usize] != '.')
+                            {
+                                break;
+                            }
+                            if [n + w, n + e].contains(&d) && q == '.' && ![self.ep].contains(&j) {
+                                break;
+                            }
+                            // If we move to the last row, we can be anything
+                            if a8 <= j && j <= h8 {
+                                for prom in "NBRQ".chars() {
+                                    moves.push(Move {
+                                        i: i,
+                                        j: j,
+                                        prom: prom,
+                                    });
+                                }
+                                break;
+                            }
+                        }
+                        // Move it
+                        moves.push(Move {
+                            i: i,
+                            j: j,
+                            prom: ' ',
+                        });
+                        // Stop crawlers from sliding, and sliding after captures
+                        if "PNK".contains(p) || q.is_lowercase() {
                             break;
                         }
-                    }
-                    // Move it
-                    moves.push(Move {
-                        i: i,
-                        j: j,
-                        prom: ' ',
-                    });
-                    // Stop crawlers from sliding, and sliding after captures
-                    if "PNK".contains(p) || q.is_lowercase() {
-                        break;
-                    }
-                    // Castling, by sliding the rook next to the king
-                    if i == a1 && self.board[j + e as usize] == 'K' && self.wc.0 {
-                        moves.push(Move {
-                            i: j + e as usize,
-                            j: j + w as usize,
-                            prom: ' ',
-                        })
-                    }
-                    if i == h1 && self.board[j + w as usize] == 'K' && self.wc.1 {
-                        moves.push(Move {
-                            i: j + w as usize,
-                            j: j + e as usize,
-                            prom: ' ',
-                        })
+                        // Castling, by sliding the rook next to the king
+                        if i == a1 && self.board[j + e as usize] == 'K' && self.wc.0 {
+                            moves.push(Move {
+                                i: j + e as usize,
+                                j: j + w as usize,
+                                prom: ' ',
+                            })
+                        }
+                        if i == h1 && self.board[(j as i32 + w) as usize] == 'K' && self.wc.1 {
+                            moves.push(Move {
+                                i: (j as i32 + w) as usize,
+                                j: (j as i32 + e) as usize,
+                                prom: ' ',
+                            })
+                        }
                     }
                 }
             }
@@ -514,6 +514,7 @@ fn main() {
             // and not capture anything else.
             if depth == 0 {
                 ans.push((None, pos.score));
+                return ans;
             }
             // Look for the strongest ove from last time, the hash-move.
             let mut killer = self.tp_move.get(pos);
@@ -570,7 +571,7 @@ fn main() {
             }
             ans
         }
-        fn search(&mut self, history: Vec<Position>) -> Vec<(i32, i32, i32, Move)> {
+        fn search(&mut self, history: Vec<Position>, depth: i32) -> Vec<(i32, i32, i32, Move)> {
             let mate_lower: i32 = piece('K') - 10 * piece('Q');
             let eval_roughness = 15;
             let mut ans = Vec::new();
@@ -579,27 +580,25 @@ fn main() {
             self.history = history.clone();
             self.tp_score.clear();
             let mut gamma = 0;
-            for depth in 1..1000 {
-                // The inner loop is a binary search on the score of the position.
-                // Inv: lower <= score <= upper
-                // 'while lower != upper' would work, but it's too much effort to spend
-                // on what's probably not going to change the move played.
-                let (mut lower, mut upper) = (-mate_lower, mate_lower);
-                while lower < upper - eval_roughness {
-                    let score = self.bound(&history[history.len() - 1], gamma, depth, false);
-                    let mv = *self
-                        .tp_move
-                        .get(&history[history.len() - 1])
-                        .expect("move not in table");
-                    if score >= gamma {
-                        lower = score;
-                    }
-                    if score < gamma {
-                        upper = score;
-                    }
-                    ans.push((depth, gamma, score, mv));
-                    gamma = (lower + upper + 1) / 2;
+            // The inner loop is a binary search on the score of the position.
+            // Inv: lower <= score <= upper
+            // 'while lower != upper' would work, but it's too much effort to spend
+            // on what's probably not going to change the move played.
+            let (mut lower, mut upper) = (-mate_lower, mate_lower);
+            while lower < upper - eval_roughness {
+                let score = self.bound(&history[history.len() - 1], gamma, depth, false);
+                let mv = *self
+                    .tp_move
+                    .get(&history[history.len() - 1])
+                    .expect("move not in table");
+                if score >= gamma {
+                    lower = score;
                 }
+                if score < gamma {
+                    upper = score;
+                }
+                ans.push((depth, gamma, score, mv));
+                gamma = (lower + upper + 1) / 2;
             }
             ans
         }
@@ -658,7 +657,7 @@ fn main() {
     }
     fn go_loop(
         searcher: &mut Searcher,
-        hist: Vec<Position>,
+        hist: &Vec<Position>,
         max_movetime: i32,
         max_depth: i32,
         debug: bool,
@@ -667,60 +666,65 @@ fn main() {
             println!("Going movetime={max_movetime}, depth={max_depth}");
         }
         let start = std::time::Instant::now();
-        for (depth, gamma, score, mov) in searcher.search(hist) {
-            // Our max_depth implementation is a bit wasteful.
-            // We never know when we've seen the last at a certain depth
-            // before we get to the next one
-            if depth - 1 >= max_depth {
-                break;
-            }
-            let elapsed = std::time::Instant::now() - start;
-            if score >= gamma {
-                let pv = "TODO";
-                println!(
-                    "info depth {} time {} nodes {} nps {} score cp {} lowerbound pv {}",
-                    depth,
-                    (1000.0 * elapsed.as_secs_f64()).round() as u64,
-                    searcher.nodes,
-                    if elapsed.as_secs_f64() > 0.0 {
-                        (searcher.nodes as f64 / elapsed.as_secs_f64()).round() as u64
-                    } else {
-                        0
-                    },
-                    score,
-                    pv
-                );
-            } else {
-                println!(
-                    "info depth {} time {} nodes {} nps {} score cp {} upperbound",
-                    depth,
-                    (1000.0 * elapsed.as_secs_f64()).round() as u64,
-                    searcher.nodes,
-                    if elapsed.as_secs_f64() > 0.0 {
-                        (searcher.nodes as f64 / elapsed.as_secs_f64()).round() as u64
-                    } else {
-                        0
-                    },
-                    score
-                );
-                // We may not have a move yet at depth = 1
-                if depth > 1
-                    && elapsed > std::time::Duration::from_millis((max_movetime * 2 / 3) as u64)
-                {
+        for idepth in 1..max_depth + 1 {
+            for (depth, gamma, score, _mov) in searcher.search(hist.clone(), idepth) {
+                // Our max_depth implementation is a bit wasteful.
+                // We never know when we've seen the last at a certain depth
+                // before we get to the next one
+                if depth - 1 >= max_depth {
                     break;
+                }
+                let elapsed = std::time::Instant::now() - start;
+                if score >= gamma {
+                    //println!("move return {}",
+                    //    render_move(Some(_mov), (hist.len() % 2) == 0));
+                    let pv_vec = pv(&searcher, &hist[hist.len() - 1]);
+                    let pv_str = pv_vec.join("");
+                    println!(
+                        "info depth {} time {} nodes {} nps {} score cp {} lowerbound pv {}",
+                        depth,
+                        (1000.0 * elapsed.as_secs_f64()).round() as u64,
+                        searcher.nodes,
+                        if elapsed.as_secs_f64() > 0.0 {
+                            (searcher.nodes as f64 / elapsed.as_secs_f64()).round() as u64
+                        } else {
+                            0
+                        },
+                        score,
+                        pv_str,
+                    );
+                } else {
+                    println!(
+                        "info depth {} time {} nodes {} nps {} score cp {} upperbound",
+                        depth,
+                        (1000.0 * elapsed.as_secs_f64()).round() as u64,
+                        searcher.nodes,
+                        if elapsed.as_secs_f64() > 0.0 {
+                            (searcher.nodes as f64 / elapsed.as_secs_f64()).round() as u64
+                        } else {
+                            0
+                        },
+                        score
+                    );
+                    // We may not have a move yet at depth = 1
+                    if depth > 1
+                        && elapsed > std::time::Duration::from_secs((max_movetime * 2 / 3) as u64)
+                    {
+                        break;
+                    }
                 }
             }
         }
         // FIXME: If we are in "go infinite" we aren't actually supposed to stop the
         // go-loop before we got stop_event. Unfortunately we currently don't know if
         // we are in "go infinite" since it's simply translated to "go depth 100".
-        let my_pv = ["TODO"]; //pv(searcher, hist[-1], include_scores=False)
+        let my_pv = pv(searcher, &hist[hist.len() - 1]);
         println!(
             "bestmove {}",
             if !my_pv.is_empty() {
-                my_pv[0]
+                my_pv[0].clone()
             } else {
-                "(none)"
+                "(none)".to_string()
             }
         );
     }
@@ -736,10 +740,10 @@ fn main() {
         for d in 1..max_depth + 1 {
             if find_draw {
                 let s0 = searcher.bound(&hist[hist.len() - 1], 0, d, true);
-                let mut elapsed = std::time::Instant::now() - start;
+                //let mut elapsed = std::time::Instant::now() - start;
                 println!("info depth {} score lowerbound cp {}", d, s0);
                 let s1 = searcher.bound(&hist[hist.len() - 1], 1, d, true);
-                elapsed = std::time::Instant::now() - start;
+                //elapsed = std::time::Instant::now() - start;
                 println!("info depth {} score lowerbound cp {}", d, s1);
                 if s0 >= 0 && s1 < 1 {
                     break;
@@ -747,13 +751,14 @@ fn main() {
             } else {
                 let score = searcher.bound(&hist[hist.len() - 1], mate_lower, d, true);
                 let elapsed = std::time::Instant::now() - start;
-                let pv = "TODO"; //pv(searcher, hist[-1], include_scores=False)
+                let pv_vec = pv(&searcher, &hist[hist.len() - 1]);
+                let pv_str = pv_vec.join("");
                 println!(
                     "info depth {} score lowerbound cp {} time {} pv {}",
                     d,
                     score,
                     (1000.0 * elapsed.as_secs_f64()).round() as u64,
-                    pv
+                    pv_str
                 );
                 if score >= mate_lower {
                     break;
@@ -876,7 +881,7 @@ fn main() {
                     vec![pos.rotate(false), pos]
                 };
                 if args.len() > 8 {
-                    for (ply, mov) in args[9..].iter().enumerate() {
+                    for (_ply, mov) in args[9..].iter().enumerate() {
                         hist.push(
                             hist[hist.len() - 1].domove(parse_move(mov, hist.len() % 2 == 1)),
                         );
@@ -884,21 +889,20 @@ fn main() {
                 }
             }
             if args[0] == "go" {
-                let think = 10^6;
-                let max_depth = 100;
+                let think = 100 ^ 6;
+                let max_depth = 30;
                 if args.len() > 1 && args[1] == "infinite" {
-                    go_loop(&mut searcher, hist.clone(), think, max_depth, debug);
+                    go_loop(&mut searcher, &hist, think, max_depth, debug);
                 } else if args.len() > 1 && args[1] == "movetime" {
                     let max_movetime: i32 = args[2].parse::<i32>().unwrap();
-                    go_loop(&mut searcher, hist.clone(), max_movetime, max_depth, debug);
+                    go_loop(&mut searcher, &hist, max_movetime, max_depth, debug);
                 } else if args.len() > 1 && args[1] == "depth" {
                     let max_depth: i32 = args[2].parse::<i32>().unwrap();
-                    go_loop(&mut searcher, hist.clone(), think, max_depth, debug);
+                    go_loop(&mut searcher, &hist, think, max_depth, debug);
                 } else {
                     println!("Unknown go command: {}", line);
                 }
             }
-
         }
     }
 
@@ -965,6 +969,23 @@ fn main() {
             }
         }
         return false;
+    }
+    fn pv(searcher: &Searcher, pos: &Position) -> Vec<String> {
+        let mut res: Vec<String> = Vec::new();
+        let mut color = get_color(&pos);
+        //let origc = color;
+        let mut pos = pos.clone();
+        loop {
+            let mov = searcher.tp_move.get(&pos);
+            // The tp may have illegal moves, given lower depths don't detect king killing
+            if mov.is_none() || can_kill_king(&pos.domove(*mov.unwrap())) {
+                break;
+            }
+            res.push(render_move(mov.cloned(), get_color(&pos) == 0));
+            pos = pos.domove(*mov.unwrap());
+            color = 1 - color;
+        }
+        return res;
     }
 
     let hist: Vec<Position> = vec![Position {
