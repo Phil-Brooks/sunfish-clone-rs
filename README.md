@@ -2,7 +2,7 @@
 
 Sunfish is a simple, but strong chess engine, written in Python. This can be found [here](https://github.com/thomasahle/sunfish).
 
-This is a clone, converted to Rust as a learning exercise - the code is intended to be identical.
+This is a clone, converted to Rust, as a learning exercise - the code is intended to be identical.
 
 This contrasts with [Recursing's Rust port](https://github.com/Recursing/sunfish_rs) which is similar in principle, but is more of a rewrite using Rust's particular features.
 
